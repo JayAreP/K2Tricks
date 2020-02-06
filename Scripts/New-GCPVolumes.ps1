@@ -268,7 +268,7 @@ function New-K2HostIqn {
 # ----------------------------
 
 # Connect to the storage array 
-Write-Output --- Connecting to K2 array at $k2host ---
+Write-Output "--- Connecting to K2 array at $k2host ---"
 try {
     Connect-K2Array -K2Array $k2host -Username $K2credentials.UserName -Password $K2credentials.GetNetworkCredential().password
 } catch {
@@ -287,14 +287,14 @@ if (!$gceInstance) {
     $gceInstance = New-MenuFromArray -array $array -property name -message "Select GCP compute host to provision"
 }
 
-Write-Output --- Selected $gceInstance as GC VM ---
+Write-Output "--- Selected $gceInstance as GC VM ---"
 
 $cVM = Get-GceInstance -Name $gceInstance
 $managementIP = ($cVM.NetworkInterfaces | where-object {$_.name -eq $gceManageInt}).NetworkIP
 
 # Scan the host to present iqns to the K2
 
-write-out --- Scanning host $gceInstance at $managementIP, this may take a while ---
+Write-Output "--- Scanning host $gceInstance at $managementIP, this may take a while ---"
 
 Invoke-SSHRescan -hostname $managementIP -credentials $VMCredentials -k2instance $managementIP
 
@@ -306,18 +306,18 @@ if (!$iqnlist) {
     Return No output was generated. Please check host configuration. 
 } 
 
-Write-Output --- Discovered the following iqns --- 
+Write-Output "--- Discovered the following iqns ---"
 Write-Output $iqnlist
 
 # Create the volumes
 
-Write-Output --- Creating $lunCount volumes at $lunSizeInGB GB in size ---
+Write-Output "--- Creating $lunCount volumes at $lunSizeInGB GB in size ---"
 
 $volPrep = PrepVolumes -hostName $gceInstance -hostType Linux -sizeInGB $lunSizeInGB -numberOfVolumes $lunCount
 
 # associate the iqns with the host
 
-Write-Output --- Associating iqn with $gceInstance ---
+Write-Output "--- Associating iqn with $gceInstance ---"
 
 foreach ($i in $iqnlist) {
     $endpointURI = 'https://' + $k2host + '/api/v2/host_iqns'
@@ -327,7 +327,7 @@ foreach ($i in $iqnlist) {
 
 # Map the volumes to the host
 
-Write-Output --- Mapping the new luns to host $gceInstance ---
+Write-Output "--- Mapping the new luns to host $gceInstance ---"
 
 foreach ($i in $volPrep) {
     $endpointURI = 'https://' + $k2host + '/api/v2/mappings'
@@ -337,14 +337,14 @@ foreach ($i in $volPrep) {
 
 # Get iSCSI port IPs
 
-Write-Output --- Grabbing the iSCSI ports for $k2host ---
+Write-Output "--- Grabbing the iSCSI ports for $k2host ---"
 
 $endpointURI = 'https://' + $k2host + '/api/v2/system/iscsi_ports'
 $k2iSCSIPorts = Invoke-K2RESTCall -URI $endpointURI -method GET -credentials $K2credentials
 
 # Rescan the host to see the volumes. 
 
-Write-Output --- Finalizing the LUN scans on $gceInstance ---
+Write-Output "--- Finalizing the LUN scans on $gceInstance ---"
 
 foreach ($i in $k2iSCSIPorts.hits) {
     $iscsi = $i.ip_address
