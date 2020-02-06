@@ -20,6 +20,7 @@ function Invoke-SSHRescan {
     $discoverycmd = "sudo iscsiadm --mode session --op show"
     $request = Invoke-SSHCommand -Command $discoverycmd -SessionId $sshsesh.sessionId
     $discoverycmd = "ls /dev/disk/by-path/ | grep  " + $k2instance
+    Invoke-SSHCommand -Command $discoverycmd -SessionId $sshsesh.sessionId
 
     return $request.output
 }

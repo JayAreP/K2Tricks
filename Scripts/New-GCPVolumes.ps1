@@ -17,10 +17,12 @@ param(
 
 if (!$K2credentials) {
     $K2credentials = Import-Clixml .\admin.xml
+    $K2credentials
 }
 
 if (!$VMCredentials) {
     $VMCredentials = Import-Clixml .\km_guest.xml
+    $VMCredentials
 }
 # OMG ALL THESE FUNCTIONS!
 
@@ -234,10 +236,11 @@ function Invoke-SSHRescan {
     $discoverycmd = "sudo iscsiadm -m discovery -t sendtargets -p '" + $k2instance + ":3260'"
     Invoke-SSHCommand -Command $discoverycmd -SessionId $sshsesh.sessionId
     $discoverycmd = "sudo iscsiadm -m node --login &"
-    Invoke-SSHCommand -Command $discoverycmd -SessionId $sshsesh.sessionId -ErrorAction SilentlyContinue
+    Invoke-SSHCommand -Command $discoverycmd -SessionId $sshsesh.sessionId
     $discoverycmd = "sudo iscsiadm --mode session --op show"
     $request = Invoke-SSHCommand -Command $discoverycmd -SessionId $sshsesh.sessionId
     $discoverycmd = "ls /dev/disk/by-path/ | grep  " + $k2instance
+    Invoke-SSHCommand -Command $discoverycmd -SessionId $sshsesh.sessionId
 
     return $request.output
 }
