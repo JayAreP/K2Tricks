@@ -303,7 +303,7 @@ $endpointURI = 'https://' + $k2host + '/api/v2/system/iscsi_ports'
 $k2iSCSIPorts = Invoke-K2RESTCall -URI $endpointURI -method GET -credentials $K2credentials
 
 Write-Output "--- Discovered iSCSI ports: ---"
-Write-Output $k2iSCSIPorts
+$k2iSCSIPorts.hits
 
 # Scan the host to present iqns to the K2
 
