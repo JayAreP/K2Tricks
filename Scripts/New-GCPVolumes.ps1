@@ -266,6 +266,10 @@ if (!$gceInstance) {
 $cVM = Get-GceInstance -Name $gceInstance
 $managementIP = ($cVM.NetworkInterfaces | where-object {$_.name -eq $gceManageInt}).NetworkIP
 
+# Scan the host to present iqns to the K2
+
+Invoke-SSHRescan -hostname $managementIP -credentials $VMCredentials -k2instance $k2host
+
 # Gather the iqns
 
 $iqnlist = Get-SSHiqn -hostname $managementIP -credentials $VMCredentials
@@ -294,6 +298,6 @@ foreach ($i in $volPrep) {
     Invoke-K2RESTCall -URI $endpointURI -method POST -body $body -credentials $K2credentials
 }
 
-# Rescan the host
+# Rescan the host to see the volumes. 
 
 Invoke-SSHRescan -hostname $managementIP -credentials $VMCredentials -k2instance $k2host
