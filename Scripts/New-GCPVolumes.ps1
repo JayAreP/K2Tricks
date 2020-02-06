@@ -292,7 +292,7 @@ $managementIP = ($cVM.NetworkInterfaces | where-object {$_.name -eq $gceManageIn
 
 # Scan the host to present iqns to the K2
 
-Invoke-SSHRescan -hostname $managementIP -credentials $VMCredentials -k2instance $k2host
+Invoke-SSHRescan -hostname $managementIP -credentials $VMCredentials -k2instance $managementIP
 
 # Gather the iqns
 
