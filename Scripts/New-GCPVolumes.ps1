@@ -235,8 +235,8 @@ function Invoke-SSHRescan {
 
     $discoverycmd = "sudo iscsiadm -m discovery -t sendtargets -p '" + $k2instance + ":3260'"
     Invoke-SSHCommand -Command $discoverycmd -SessionId $sshsesh.sessionId
-    $discoverycmd = "sudo iscsiadm -m node --login &"
-    Invoke-SSHCommand -Command $discoverycmd -SessionId $sshsesh.sessionId
+    # $discoverycmd = "sudo iscsiadm -m node --login &"
+    # Invoke-SSHCommand -Command $discoverycmd -SessionId $sshsesh.sessionId
     $discoverycmd = "sudo iscsiadm --mode session --op show"
     $request = Invoke-SSHCommand -Command $discoverycmd -SessionId $sshsesh.sessionId
     $discoverycmd = "ls /dev/disk/by-path/ | grep  " + $k2instance
