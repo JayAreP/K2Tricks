@@ -1,16 +1,27 @@
 param(
-    [parameter(Mandatory)]
+    [parameter()]
     [string] $gceInstance,
     [parameter()]
     [string] $gceManageInt = 'nic0',
-    [parameter(Mandatory)]
-    [string] $k2host,
-    [parameter(Mandatory)]
+    [parameter()]
+    [string] $k2host = '172.19.0.11',
+    [parameter()]
+    [int] $lunCount = 6,
+    [parameter()]
+    [int] $lunSizeInGB = 40,
+    [parameter()]
     [System.Management.Automation.PSCredential] $K2credentials,
-    [parameter(Mandatory)]
+    [parameter()]
     [System.Management.Automation.PSCredential] $VMCredentials
 )
 
+if (!$K2credentials) {
+    $K2credentials = Import-Clixml .\admin.xml
+}
+
+if (!$VMCredentials) {
+    $VMCredentials = Import-Clixml .\km_guest.xml
+}
 # OMG ALL THESE FUNCTIONS!
 
 function PrepVolumes {
@@ -220,10 +231,15 @@ function Invoke-SSHRescan {
         $sshsesh = (Get-SSHSession -HostName $hostname)[0]
     }
 
-    $discoverycmd = "iscsiadm -m discovery -t sendtargets -p '" + $k2instance + ":3260'"
+    $discoverycmd = "sudo iscsiadm -m discovery -t sendtargets -p '" + $k2instance + ":3260'"
+    Invoke-SSHCommand -Command $discoverycmd -SessionId $sshsesh.sessionId
+    $discoverycmd = "sudo iscsiadm -m node --login &"
+    Invoke-SSHCommand -Command $discoverycmd -SessionId $sshsesh.sessionId
+    $discoverycmd = "sudo iscsiadm --mode session --op show"
     $request = Invoke-SSHCommand -Command $discoverycmd -SessionId $sshsesh.sessionId
+    $discoverycmd = "ls /dev/disk/by-path/ | grep  " + $k2instance
 
-    return $request
+    return $request.output
 }
 
 function New-K2HostIqn {
@@ -246,7 +262,10 @@ function New-K2HostIqn {
 
     return $o | ConvertTo-Json -Depth 10
 }
-# Heavy lifting
+
+# ----------------------------
+#       Heavy lifting
+# ----------------------------
 
 # Connect to the storage array 
 
@@ -278,6 +297,10 @@ if (!$iqnlist) {
     Return No output was generated. Please check host configuration. 
 } 
 
+# Create the volumes
+
+$volPrep = PrepVolumes -hostName $gceInstance -hostType Linux -sizeInGB $lunSizeInGB -numberOfVolumes $lunCount
+
 # associate the iqns with the host
 
 foreach ($i in $iqnlist) {
@@ -285,10 +308,6 @@ foreach ($i in $iqnlist) {
     $body = New-K2HostIqn -hostname $gceInstance -iqn $i
     Invoke-K2RESTCall -URI $endpointURI -method POST -body $body -credentials $K2credentials
 }
-
-# Create the volumes
-
-$volPrep = PrepVolumes -hostName $gceInstance -hostType Linux -sizeInGB 30 -numberOfVolumes 3 
 
 # Map the volumes to the host
 
@@ -298,6 +317,13 @@ foreach ($i in $volPrep) {
     Invoke-K2RESTCall -URI $endpointURI -method POST -body $body -credentials $K2credentials
 }
 
-# Rescan the host to see the volumes. 
+# Get iSCSI port IPs
 
-Invoke-SSHRescan -hostname $managementIP -credentials $VMCredentials -k2instance $k2host
+$endpointURI = 'https://' + $k2host + '/api/v2/system/iscsi_ports'
+$k2iSCSIPorts = Invoke-K2RESTCall -URI $endpointURI -method GET -credentials $K2credentials
+
+# Rescan the host to see the volumes. 
+foreach ($i in $k2iSCSIPorts.hits) {
+    $iscsi = $i.ip_address
+    Invoke-SSHRescan -hostname $managementIP -credentials $VMCredentials -k2instance $iscsi
+}
