@@ -278,7 +278,12 @@ try {
 ## Get the IP information of the compute instances. 
 
 if (!$gceInstance) {
-    $array = Get-GceInstance
+    try {
+        $array = Get-GceInstance
+    } catch {
+        Return Cannot connect to Google Cloud. Please check gcloud init settings
+    }
+    
     $gceInstance = New-MenuFromArray -array $array -property name -message "Select GCP compute host to provision"
 }
 
