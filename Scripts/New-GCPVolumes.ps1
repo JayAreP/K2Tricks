@@ -292,11 +292,21 @@ Write-Output "--- Selected $gceInstance as GC VM ---"
 $cVM = Get-GceInstance -Name $gceInstance
 $managementIP = ($cVM.NetworkInterfaces | where-object {$_.name -eq $gceManageInt}).NetworkIP
 
+# Get iSCSI port IPs
+
+Write-Output "--- Grabbing the iSCSI ports for $k2host ---"
+
+$endpointURI = 'https://' + $k2host + '/api/v2/system/iscsi_ports'
+$k2iSCSIPorts = Invoke-K2RESTCall -URI $endpointURI -method GET -credentials $K2credentials
+
 # Scan the host to present iqns to the K2
 
 Write-Output "--- Scanning host $gceInstance at $managementIP, this may take a while ---"
 
-Invoke-SSHRescan -hostname $managementIP -credentials $VMCredentials -k2instance $managementIP
+foreach ($i in $k2iSCSIPorts.hits) {
+    $iscsi = $i.ip_address
+    Invoke-SSHRescan -hostname $managementIP -credentials $VMCredentials -k2instance $iscsi
+}
 
 # Gather the iqns
 
@@ -334,13 +344,6 @@ foreach ($i in $volPrep) {
     $body = New-K2HostMapping -hostID $i.HostID -volumeID $i.VolumeID
     Invoke-K2RESTCall -URI $endpointURI -method POST -body $body -credentials $K2credentials
 }
-
-# Get iSCSI port IPs
-
-Write-Output "--- Grabbing the iSCSI ports for $k2host ---"
-
-$endpointURI = 'https://' + $k2host + '/api/v2/system/iscsi_ports'
-$k2iSCSIPorts = Invoke-K2RESTCall -URI $endpointURI -method GET -credentials $K2credentials
 
 # Rescan the host to see the volumes. 
 
