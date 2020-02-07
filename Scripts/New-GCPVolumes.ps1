@@ -314,13 +314,16 @@ if (!$gceInstance) {
     } catch {
         Return Cannot connect to Google Cloud. Please check gcloud init settings
     }
-    
     $gceInstance = New-MenuFromArray -array $array -property name -message "Select GCP compute host to provision"
 }
 
 Write-Output "--- Selected $gceInstance as GC VM ---"
 
-$cVM = Get-GceInstance -Name $gceInstance
+try {
+    $cVM = Get-GceInstance -Name $gceInstance
+} catch {
+    Return "!! Cannot locate the GCE VM instance named $gceInstance"
+}
 $managementIP = ($cVM.NetworkInterfaces | where-object {$_.name -eq $gceManageInt}).NetworkIP
 
 # Get iSCSI port IPs
