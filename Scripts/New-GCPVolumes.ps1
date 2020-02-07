@@ -13,6 +13,8 @@ param(
     [ValidateSet('Linux','Windows',IgnoreCase = $false)]
     [string] $OS = "Linux",
     [parameter()]
+    [switch] $disableDeduplication,
+    [parameter()]
     [System.Management.Automation.PSCredential] $K2credentials,
     [parameter()]
     [System.Management.Automation.PSCredential] $VMCredentials
@@ -40,7 +42,9 @@ function PrepVolumes {
         [parameter(Mandatory)]
         [int] $sizeInGB,
         [parameter()]
-        [int] $numberOfVolumes = 1
+        [int] $numberOfVolumes = 1,
+        [parameter()]
+        [switch] $disableDeduplication
     )
 
     $returnarray = @()
@@ -56,7 +60,11 @@ function PrepVolumes {
 
     $volumeGroup = $hostName + '_volgrp'
     if (!(Get-K2VolumeGroup -Name $volumeGroup -WarningAction silentlycontinue)) {
-        $newvolgroup = New-K2VolumeGroup -Name $volumeGroup 
+        if ($disableDeDuplication) {
+            $newvolgroup = New-K2VolumeGroup -Name $volumeGroup -DisableDeduplication
+        } else {
+            $newvolgroup = New-K2VolumeGroup -Name $volumeGroup 
+        }
     }
 
     # Tally the existing volumes for $start var
@@ -64,18 +72,21 @@ function PrepVolumes {
     if (Get-K2Volume | Where-Object {$_.name -match $gceInstance}) {
         $start = (Get-K2Volume | where-object {$_.name -match $gceInstance}).count
         $numberOfVolumes = $numberOfVolumes + $start
+        $start++
     } else {
         $start = 1
     }
 
-    $start = 1
     while ($start -le $numberOfVolumes) {
         $volName = $hostName + '-' + $start
-        if (Get-K2Volume -name $volnname) {
+        if (Get-K2Volume -name $volName -WarningAction silentlycontinue) {
+            Write-Verbose "-- $volname  already existing, trying next"
             $numberOfVolumes++
             $start++
             Continue
+            start-sleep -Seconds 1
         }
+        Write-Verbose "-- Creating $volName"
         $newvol = New-K2Volume -VolumeGroup $volumeGroup -Name $volName -SizeGB $sizeInGB
         $start++
         $o = new-object psobject
@@ -353,22 +364,30 @@ Write-Output $iqnlist
 
 Write-Output "--- Creating $lunCount volumes at $lunSizeInGB GB in size ---"
 
-$volPrep = PrepVolumes -hostName $gceInstance -hostType $OS -sizeInGB $lunSizeInGB -numberOfVolumes $lunCount
+if ($disableDeduplication) {
+    $volPrep = PrepVolumes -hostName $gceInstance -hostType $OS -sizeInGB $lunSizeInGB -numberOfVolumes $lunCount -disableDeduplication
+} else {
+    $volPrep = PrepVolumes -hostName $gceInstance -hostType $OS -sizeInGB $lunSizeInGB -numberOfVolumes $lunCount
+}
+
 
 # associate the iqns with the host
 
 Write-Output "--- Associating iqn with $gceInstance ---"
 
-$ciqns = (Invoke-K2RESTCall -URI 'https://172.19.0.11/api/v2/host_iqns' -method GET -credentials $K2credentials).hits
+$endpointURI = 'https://' + $k2host + '/api/v2/host_iqns'
+$ciqns = (Invoke-K2RESTCall -URI $endpointURI -method GET -credentials $K2credentials).hits
 $hostprefix = '/hosts/' + $volPrep[0].hostid
 
-if ($ciqns.host.ref -notcontains $hostprefix) {
-    foreach ($i in $iqnlist) {
+
+foreach ($i in $iqnlist) {
+    if (!($ciqns | Where-Object {$_.iqn -eq $i}).host.ref) {
         $endpointURI = 'https://' + $k2host + '/api/v2/host_iqns'
         $body = New-K2HostIqn -hostname $gceInstance -iqn $i
         Invoke-K2RESTCall -URI $endpointURI -method POST -body $body -credentials $K2credentials
     }
 }
+
 
 # Map the volumes to the host
 
