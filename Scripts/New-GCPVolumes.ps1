@@ -10,6 +10,9 @@ param(
     [parameter()]
     [int] $lunSizeInGB = 40,
     [parameter()]
+    [ValidateSet('Linux','Windows',IgnoreCase = $false)]
+    [string] $OS = "Linux",
+    [parameter()]
     [System.Management.Automation.PSCredential] $K2credentials,
     [parameter()]
     [System.Management.Automation.PSCredential] $VMCredentials
@@ -56,9 +59,23 @@ function PrepVolumes {
         $newvolgroup = New-K2VolumeGroup -Name $volumeGroup 
     }
 
+    # Tally the existing volumes for $start var
+
+    if (Get-K2Volume | Where-Object {$_.name -match $gceInstance}) {
+        $start = (Get-K2Volume | where-object {$_.name -match $gceInstance}).count
+        $numberOfVolumes = $numberOfVolumes + $start
+    } else {
+        $start = 1
+    }
+
     $start = 1
     while ($start -le $numberOfVolumes) {
         $volName = $hostName + '-' + $start
+        if (Get-K2Volume -name $volnname) {
+            $numberOfVolumes++
+            $start++
+            Continue
+        }
         $newvol = New-K2Volume -VolumeGroup $volumeGroup -Name $volName -SizeGB $sizeInGB
         $start++
         $o = new-object psobject
@@ -316,11 +333,18 @@ foreach ($i in $k2iSCSIPorts.hits) {
 
 # Gather the iqns
 
-$iqnlist = Get-SSHiqn -hostname $managementIP -credentials $VMCredentials
+if ($OS -eq "Linux") {
+    $iqnlist = Get-SSHiqn -hostname $managementIP -credentials $VMCredentials
 
-if (!$iqnlist) {
-    Return No output was generated. Please check host configuration. 
-} 
+    if (!$iqnlist) {
+        Return No output was generated. Please check host configuration. 
+    } 
+}
+
+if ($OS -eq "Windows") {
+    # winrm call for iqn
+}
+
 
 Write-Output "--- Discovered the following iqns ---"
 Write-Output $iqnlist
@@ -329,16 +353,21 @@ Write-Output $iqnlist
 
 Write-Output "--- Creating $lunCount volumes at $lunSizeInGB GB in size ---"
 
-$volPrep = PrepVolumes -hostName $gceInstance -hostType Linux -sizeInGB $lunSizeInGB -numberOfVolumes $lunCount
+$volPrep = PrepVolumes -hostName $gceInstance -hostType $OS -sizeInGB $lunSizeInGB -numberOfVolumes $lunCount
 
 # associate the iqns with the host
 
 Write-Output "--- Associating iqn with $gceInstance ---"
 
-foreach ($i in $iqnlist) {
-    $endpointURI = 'https://' + $k2host + '/api/v2/host_iqns'
-    $body = New-K2HostIqn -hostname $gceInstance -iqn $i
-    Invoke-K2RESTCall -URI $endpointURI -method POST -body $body -credentials $K2credentials
+$ciqns = (Invoke-K2RESTCall -URI 'https://172.19.0.11/api/v2/host_iqns' -method GET -credentials $K2credentials).hits
+$hostprefix = '/hosts/' + $volPrep[0].hostid
+
+if ($ciqns.host.ref -notcontains $hostprefix) {
+    foreach ($i in $iqnlist) {
+        $endpointURI = 'https://' + $k2host + '/api/v2/host_iqns'
+        $body = New-K2HostIqn -hostname $gceInstance -iqn $i
+        Invoke-K2RESTCall -URI $endpointURI -method POST -body $body -credentials $K2credentials
+    }
 }
 
 # Map the volumes to the host
