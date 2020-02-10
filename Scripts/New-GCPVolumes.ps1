@@ -58,9 +58,10 @@ function PrepVolumes {
 
     # Create Volume Groups
 
-    $volumeGroup = $hostName + '_volgrp'
+    $volumeGroup = $hostName + '_volgrp-DD' 
     if (!(Get-K2VolumeGroup -Name $volumeGroup -WarningAction silentlycontinue)) {
         if ($disableDeDuplication) {
+            $volumeGroup = $volumeGroup.Replace('-DD',$null)
             $newvolgroup = New-K2VolumeGroup -Name $volumeGroup -DisableDeduplication
         } else {
             $newvolgroup = New-K2VolumeGroup -Name $volumeGroup 
