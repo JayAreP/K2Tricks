@@ -335,11 +335,11 @@ $endpointURI = 'https://' + $k2host + '/api/v2/system/iscsi_ports'
 $k2iSCSIPorts = Invoke-K2RESTCall -URI $endpointURI -method GET -credentials $K2credentials
 
 Write-Output "--- Discovered iSCSI ports: ---"
-$k2iSCSIPorts.hits
+Write-Output $k2iSCSIPorts.hits.ip_address
 
 # Scan the host to present iqns to the K2
 
-Write-Output "--- Scanning host $gceInstance at $managementIP, this may take a while ---"
+Write-Output "--- Scanning host $gceInstance at $managementIP for target $iscsi, this may take a while ---"
 
 foreach ($i in $k2iSCSIPorts.hits) {
     $iscsi = $i.ip_address
