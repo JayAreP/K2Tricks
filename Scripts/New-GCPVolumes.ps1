@@ -26,7 +26,7 @@ if (!$K2credentials) {
 }
 
 if (!$VMCredentials) {
-    $VMCredentials = Import-Clixml .\km_guest.xml
+    $VMCredentials = Import-Clixml .\k2serviceuser.xml
     $VMCredentials
 }
 # OMG ALL THESE FUNCTIONS!
@@ -247,6 +247,17 @@ function Get-SSHiqn {
     return $results
 }
 
+function Get-WinRMiqn {
+    param(
+        [parameter(Mandatory)]
+        [string] $hostname,
+        [parameter(Mandatory)]
+        [System.Management.Automation.PSCredential] $credentials
+    )
+
+    Invoke-Command -ComputerName $hostname -Credential $credentials -ScriptBlock {(Get-InitiatorPort | Where-Object {$_.instancename}).nodeaddress}
+}
+
 function Invoke-SSHRescan {
     param(
         [parameter(Mandatory)]
@@ -264,14 +275,27 @@ function Invoke-SSHRescan {
 
     $discoverycmd = "sudo iscsiadm -m discovery -t sendtargets -p '" + $k2instance + ":3260'"
     Invoke-SSHCommand -Command $discoverycmd -SessionId $sshsesh.sessionId
-    # $discoverycmd = "sudo iscsiadm -m node --login &"
-    # Invoke-SSHCommand -Command $discoverycmd -SessionId $sshsesh.sessionId
+    $discoverycmd = "sudo iscsiadm -m node --login"
+    Invoke-SSHCommand -Command $discoverycmd -SessionId $sshsesh.sessionId
     $discoverycmd = "sudo iscsiadm --mode session --op show"
     $request = Invoke-SSHCommand -Command $discoverycmd -SessionId $sshsesh.sessionId
     $discoverycmd = "ls /dev/disk/by-path/ | grep  " + $k2instance
     Invoke-SSHCommand -Command $discoverycmd -SessionId $sshsesh.sessionId
 
     return $request.output
+}
+
+function Invoke-WinRMRescan {
+    param(
+        [parameter(Mandatory)]
+        [string] $hostname,
+        [parameter(Mandatory)]
+        [System.Management.Automation.PSCredential] $credentials,
+        [parameter(Mandatory)]
+        [string] $k2instance
+    )
+
+    Invoke-Command -ComputerName $hostname -Credential $credentials -ScriptBlock {Update-IscsiTarget -InitiatorPort (Get-InitiatorPort | Where-Object {$_.instancename})}
 }
 
 function New-K2HostIqn {
@@ -343,18 +367,24 @@ Write-Output "--- Scanning host $gceInstance at $managementIP for target $iscsi,
 
 foreach ($i in $k2iSCSIPorts.hits) {
     $iscsi = $i.ip_address
-    Invoke-SSHRescan -hostname $managementIP -credentials $VMCredentials -k2instance $iscsi
+    if ($OS -eq 'Linux') {
+        Invoke-SSHRescan -hostname $managementIP -credentials $VMCredentials -k2instance $iscsi
+    } elseif ($OS -eq 'Windows') {
+        Invoke-WinRMRescan -hostname $managementIP -credentials $VMCredentials -k2instance $iscsi
+    }
 }
 
 # Gather the iqns
 
 if ($OS -eq "Linux") {
     $iqnlist = Get-SSHiqn -hostname $managementIP -credentials $VMCredentials
-
-    if (!$iqnlist) {
-        Return No output was generated. Please check host configuration. 
-    } 
+} elseif ($OS -eq 'Windows') {
+    $iqnlist = Get-WinRMiqn -hostname $managementIP -credentials $VMCredentials
 }
+
+if (!$iqnlist) {
+    Return No iqn output was generated. Please check host configuration. 
+} 
 
 if ($OS -eq "Windows") {
     # winrm call for iqn
