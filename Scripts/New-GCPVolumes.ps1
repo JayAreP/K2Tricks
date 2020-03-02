@@ -254,8 +254,8 @@ function Get-WinRMiqn {
         [parameter(Mandatory)]
         [System.Management.Automation.PSCredential] $credentials
     )
-
-    Invoke-Command -ComputerName $hostname -Credential $credentials -ScriptBlock {(Get-InitiatorPort | Where-Object {$_.instancename}).nodeaddress}
+    Add-WinrRMTrustedHost -trustedHost $hostname | Out-Null
+    return Invoke-Command -ComputerName $hostname -Credential $credentials -ScriptBlock {(Get-InitiatorPort | Where-Object {$_.instancename}).nodeaddress}
 }
 
 function Invoke-SSHRescan {
@@ -294,7 +294,7 @@ function Invoke-WinRMRescan {
         [parameter(Mandatory)]
         [string] $k2instance
     )
-
+    Add-WinrRMTrustedHost -trustedHost $hostname
     Invoke-Command -ComputerName $hostname -Credential $credentials -ScriptBlock {Update-IscsiTarget -InitiatorPort (Get-InitiatorPort | Where-Object {$_.instancename})}
 }
 
@@ -317,6 +317,21 @@ function New-K2HostIqn {
     $o | Add-Member -MemberType NoteProperty -Name 'host' -Value $r
 
     return $o | ConvertTo-Json -Depth 10
+}
+
+function Add-WinrRMTrustedHost {
+    param(
+        [parameter(Mandatory)]
+        [string] $trustedHost
+    )
+    
+    [array]$thosts = (winrm get winrm/config/client | Where-Object {$_ -match 'TrustedHosts'}).replace('TrustedHosts =',$null).trim().split(',')
+    if ($thosts) {
+        $thosts += $trustedHost
+    }
+    $thoststring = ($thosts -join ",")
+    $fullstring = "winrm set winrm/config/client '@{TrustedHosts=" + '"' + $thoststring + '"' + '}' + "'"
+    Invoke-Expression -Command $fullstring
 }
 
 # ----------------------------
