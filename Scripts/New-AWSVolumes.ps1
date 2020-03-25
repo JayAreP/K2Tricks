@@ -1,12 +1,12 @@
 param(
     [parameter()]
-    # [string] $gceInstance,
+    # [string] $cVM.RunningInstance.tags.Value,
     [string] $ec2Instance,
     [parameter()]
     # [string] $gceManageInt = 'nic0',
-    [string] $ec2ManagementInt = 'data1',
+    [string] $ec2ManagementInt = 'Primary network interface',
     [parameter()]
-    [string] $k2host = '172.19.0.11',
+    [string] $k2host = '10.202.2.33',
     [parameter()]
     [int] $lunCount = 6,
     [parameter()]
@@ -17,9 +17,7 @@ param(
     [parameter()]
     [switch] $disableDeduplication,
     [parameter()]
-    [System.Management.Automation.PSCredential] $K2credentials,
-    [parameter()]
-    [System.Management.Automation.PSCredential] $VMCredentials
+    [System.Management.Automation.PSCredential] $K2credentials
 )
 
 if (!$K2credentials) {
@@ -27,10 +25,6 @@ if (!$K2credentials) {
     $K2credentials
 }
 
-if (!$VMCredentials) {
-    $VMCredentials = Import-Clixml .\k2serviceuser.xml
-    $VMCredentials
-}
 # OMG ALL THESE FUNCTIONS!
 
 function PrepVolumes {
@@ -72,8 +66,8 @@ function PrepVolumes {
 
     # Tally the existing volumes for $start var
 
-    if (Get-K2Volume | Where-Object {$_.name -match $gceInstance}) {
-        $start = (Get-K2Volume | where-object {$_.name -match $gceInstance}).count
+    if (Get-K2Volume | Where-Object {$_.name -match $cVM.RunningInstance.tags.Value}) {
+        $start = (Get-K2Volume | where-object {$_.name -match $cVM.RunningInstance.tags.Value}).count
         $numberOfVolumes = $numberOfVolumes + $start
         $start++
     } else {
@@ -306,22 +300,22 @@ try {
 
 ## Get the IP information of the compute instances. 
 
-if (!$gceInstance) {
+if (!$ec2Instance) {
     try {
-        # $array = Get-GceInstance
+        $array = Get-ec2instance
     } catch {
         Return Cannot connect to Google Cloud. Please check gcloud init settings
     }
-    $gceInstance = New-MenuFromArray -array $array -property name -message "Select GCP compute host to provision"
+    $ec2Instance = New-MenuFromArray -array $array -property name -message "Select GCP compute host to provision"
 }
 
-Write-Output "--- Selected $gceInstance as GC VM ---"
+Write-Output "--- Selected $ec2Instance as AWS VM ---"
 
 try {
-    # $cVM = Get-GceInstance -Name $gceInstance
+    # $cVM = Get-GceInstance -Name $cVM.RunningInstance.tags.Value
     $cVM = Get-EC2Instance -InstanceId $ec2Instance
 } catch {
-    Return "!! Cannot locate the GCE VM instance named $gceInstance"
+    Return "!! Cannot locate the GCE VM instance named $cVM.RunningInstance.tags.Value"
 }
 $managementIP = ($cVM.Instances.networkinterfaces | Where-Object {$_.description -match $ec2ManagementInt})[0].privateipaddress
 
@@ -341,21 +335,19 @@ Write-Output $k2iSCSIPorts.hits.ip_address
 
 # Scan the host to present iqns to the K2
 
-Write-Output "--- Scanning host $gceInstance at $managementIP for target $iscsi, this may take a while ---"
+Write-Output "--- Scanning host $cVM.RunningInstance.tags.Value at $managementIP for target $iscsi, this may take a while ---"
 
-foreach ($i in $k2iSCSIPorts.hits) {
-    $iscsi = $i.ip_address
-    if ($OS -eq 'Linux') {
-        # Invoke-SSHRescan -hostname $managementIP -credentials $VMCredentials -k2instance $iscsi
-        $userhoststring = 'centos@' + $managementIP
-        $discoverycmd = "sudo iscsiadm -m discovery -t sendtargets -p '" + $iscsi + ":3260'"
-        .\plink.exe -i .\PSKeyPairAPP.ppk $userhoststring -batch $discoverycmd
-        Start-Sleep -Seconds 3
-        $discoverycmd = "sudo iscsiadm -m node --login"
-        .\plink.exe -i .\PSKeyPairAPP.ppk $userhoststring -batch $discoverycmd
-    } elseif ($OS -eq 'Windows') {
-        Invoke-WinRMRescan -hostname $managementIP -credentials $VMCredentials -k2instance $iscsi
-    }
+$iscsi = $k2iSCSIPorts.hits[0].ip_address
+if ($OS -eq 'Linux') {
+    # Invoke-SSHRescan -hostname $managementIP -credentials $VMCredentials -k2instance $iscsi
+    $userhoststring = 'centos@' + $managementIP
+    $discoverycmd = "sudo iscsiadm -m discovery -t sendtargets -p '" + $iscsi + ":3260'"
+    .\plink.exe -i .\PSKeyPairAPP.ppk $userhoststring -batch $discoverycmd
+    Start-Sleep -Seconds 3
+    $discoverycmd = "sudo iscsiadm -m node --login"
+    .\plink.exe -i .\PSKeyPairAPP.ppk $userhoststring -batch $discoverycmd
+} elseif ($OS -eq 'Windows') {
+    Invoke-WinRMRescan -hostname $managementIP -credentials $VMCredentials -k2instance $iscsi
 }
 
 # Gather the iqns
@@ -364,6 +356,7 @@ if ($OS -eq "Linux") {
     # $iqnlist = Get-SSHiqn -hostname $managementIP -credentials $VMCredentials
     $discoverycmd = "cat /etc/iscsi/initiatorname.iscsi"
     $iqnlist = .\plink.exe -i .\PSKeyPairAPP.ppk $userhoststring -batch $discoverycmd
+    $iqnlist = $iqnlist.Replace('InitiatorName=',$null)
 } elseif ($OS -eq 'Windows') {
     $iqnlist = Get-WinRMiqn -hostname $managementIP -credentials $VMCredentials
 }
@@ -372,9 +365,6 @@ if (!$iqnlist) {
     Return No iqn output was generated. Please check host configuration. 
 } 
 
-if ($OS -eq "Windows") {
-    # winrm call for iqn
-}
 
 
 Write-Output "--- Discovered the following iqns ---"
@@ -385,15 +375,15 @@ Write-Output $iqnlist
 Write-Output "--- Creating $lunCount volumes at $lunSizeInGB GB in size ---"
 
 if ($disableDeduplication) {
-    $volPrep = PrepVolumes -hostName $gceInstance -hostType $OS -sizeInGB $lunSizeInGB -numberOfVolumes $lunCount -disableDeduplication
+    $volPrep = PrepVolumes -hostName $cVM.RunningInstance.tags.Value -hostType $OS -sizeInGB $lunSizeInGB -numberOfVolumes $lunCount -disableDeduplication
 } else {
-    $volPrep = PrepVolumes -hostName $gceInstance -hostType $OS -sizeInGB $lunSizeInGB -numberOfVolumes $lunCount
+    $volPrep = PrepVolumes -hostName $cVM.RunningInstance.tags.Value -hostType $OS -sizeInGB $lunSizeInGB -numberOfVolumes $lunCount
 }
 
 
 # associate the iqns with the host
 
-Write-Output "--- Associating iqn with $gceInstance ---"
+Write-Output "--- Associating iqn with $cVM.RunningInstance.tags.Value ---"
 
 $endpointURI = 'https://' + $k2host + '/api/v2/host_iqns'
 $ciqns = (Invoke-K2RESTCall -URI $endpointURI -method GET -credentials $K2credentials).hits
@@ -403,7 +393,7 @@ $hostprefix = '/hosts/' + $volPrep[0].hostid
 foreach ($i in $iqnlist) {
     if (!($ciqns | Where-Object {$_.iqn -eq $i}).host.ref) {
         $endpointURI = 'https://' + $k2host + '/api/v2/host_iqns'
-        $body = New-K2HostIqn -hostname $gceInstance -iqn $i
+        $body = New-K2HostIqn -hostname $cVM.RunningInstance.tags.Value -iqn $i
         Invoke-K2RESTCall -URI $endpointURI -method POST -body $body -credentials $K2credentials
     }
 }
@@ -411,7 +401,7 @@ foreach ($i in $iqnlist) {
 
 # Map the volumes to the host
 
-Write-Output "--- Mapping the new luns to host $gceInstance ---"
+Write-Output "--- Mapping the new luns to host $cVM.RunningInstance.tags.Value ---"
 
 foreach ($i in $volPrep) {
     $endpointURI = 'https://' + $k2host + '/api/v2/mappings'
@@ -421,9 +411,17 @@ foreach ($i in $volPrep) {
 
 # Rescan the host to see the volumes. 
 
-Write-Output "--- Finalizing the LUN scans on $gceInstance ---"
+Write-Output "--- Finalizing the LUN scans on $cVM.RunningInstance.tags.Value ---"
 
-foreach ($i in $k2iSCSIPorts.hits) {
-    $iscsi = $i.ip_address
-    Invoke-SSHRescan -hostname $managementIP -credentials $VMCredentials -k2instance $iscsi
+$iscsi = $k2iSCSIPorts.hits[0].ip_address
+if ($OS -eq 'Linux') {
+    # Invoke-SSHRescan -hostname $managementIP -credentials $VMCredentials -k2instance $iscsi
+    $userhoststring = 'centos@' + $managementIP
+    $discoverycmd = "sudo iscsiadm -m discovery -t sendtargets -p '" + $iscsi + ":3260'"
+    .\plink.exe -i .\PSKeyPairAPP.ppk $userhoststring -batch $discoverycmd
+    Start-Sleep -Seconds 3
+    $discoverycmd = "sudo iscsiadm -m node --login"
+    .\plink.exe -i .\PSKeyPairAPP.ppk $userhoststring -batch $discoverycmd
+} elseif ($OS -eq 'Windows') {
+    Invoke-WinRMRescan -hostname $managementIP -credentials $VMCredentials -k2instance $iscsi
 }
