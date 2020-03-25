@@ -422,7 +422,7 @@ if ($OS -eq 'Linux') {
     Start-Sleep -Seconds 3
     $discoverycmd = "sudo iscsiadm -m node --login"
     .\plink.exe -i .\PSKeyPairAPP.ppk $userhoststring -batch $discoverycmd
-    $discoverycmd = "sudo resca-scsi-bus.sh"
+    $discoverycmd = "sudo rescan-scsi-bus.sh"
     .\plink.exe -i .\PSKeyPairAPP.ppk $userhoststring -batch $discoverycmd
 } elseif ($OS -eq 'Windows') {
     Invoke-WinRMRescan -hostname $managementIP -credentials $VMCredentials -k2instance $iscsi
