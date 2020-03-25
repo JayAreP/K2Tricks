@@ -341,7 +341,7 @@ $iscsi = $k2iSCSIPorts.hits[0].ip_address
 if ($OS -eq 'Linux') {
     # Invoke-SSHRescan -hostname $managementIP -credentials $VMCredentials -k2instance $iscsi
     $userhoststring = 'centos@' + $managementIP
-    $discoverycmd = "sudo iscsiadm -m discovery -t sendtargets -p '" + $iscsi + ":3260'"
+    $discoverycmd = "sudo iscsiadm -m discovery -t sendtargets -p '" + $iscsi + ":3260' -o delete -o new"
     .\plink.exe -i .\PSKeyPairAPP.ppk $userhoststring -batch $discoverycmd
     Start-Sleep -Seconds 3
     $discoverycmd = "sudo iscsiadm -m node --login"
@@ -421,6 +421,8 @@ if ($OS -eq 'Linux') {
     .\plink.exe -i .\PSKeyPairAPP.ppk $userhoststring -batch $discoverycmd
     Start-Sleep -Seconds 3
     $discoverycmd = "sudo iscsiadm -m node --login"
+    .\plink.exe -i .\PSKeyPairAPP.ppk $userhoststring -batch $discoverycmd
+    $discoverycmd = "sudo resca-scsi-bus.sh"
     .\plink.exe -i .\PSKeyPairAPP.ppk $userhoststring -batch $discoverycmd
 } elseif ($OS -eq 'Windows') {
     Invoke-WinRMRescan -hostname $managementIP -credentials $VMCredentials -k2instance $iscsi
