@@ -1,6 +1,6 @@
 param(
     [parameter()]
-    # [string] $cVM.RunningInstance.tags.Value,
+    # [string] $VMName,
     [string] $ec2Instance,
     [parameter()]
     # [string] $gceManageInt = 'nic0',
@@ -66,8 +66,8 @@ function PrepVolumes {
 
     # Tally the existing volumes for $start var
 
-    if (Get-K2Volume | Where-Object {$_.name -match $cVM.RunningInstance.tags.Value}) {
-        $start = (Get-K2Volume | where-object {$_.name -match $cVM.RunningInstance.tags.Value}).count
+    if (Get-K2Volume | Where-Object {$_.name -match $VMName}) {
+        $start = (Get-K2Volume | where-object {$_.name -match $VMName}).count
         $numberOfVolumes = $numberOfVolumes + $start
         $start++
     } else {
@@ -312,12 +312,14 @@ if (!$ec2Instance) {
 Write-Output "--- Selected $ec2Instance as AWS VM ---"
 
 try {
-    # $cVM = Get-GceInstance -Name $cVM.RunningInstance.tags.Value
+    # $cVM = Get-GceInstance -Name $VMName
     $cVM = Get-EC2Instance -InstanceId $ec2Instance
 } catch {
-    Return "!! Cannot locate the GCE VM instance named $cVM.RunningInstance.tags.Value"
+    Return "!! Cannot locate the GCE VM instance named $VMName"
 }
 $managementIP = ($cVM.Instances.networkinterfaces | Where-Object {$_.description -match $ec2ManagementInt})[0].privateipaddress
+
+$VMName = ($cVM.RunningInstance.tags | where-object {$_.key -eq 'Name'}).value
 
 if (!$managementIP) {
     return "No IP address for interface $ec2ManagementInt"
@@ -335,7 +337,7 @@ Write-Output $k2iSCSIPorts.hits.ip_address
 
 # Scan the host to present iqns to the K2
 
-Write-Output "--- Scanning host $cVM.RunningInstance.tags.Value at $managementIP for target $iscsi, this may take a while ---"
+Write-Output "--- Scanning host $VMName at $managementIP for target $iscsi, this may take a while ---"
 
 $iscsi = $k2iSCSIPorts.hits[0].ip_address
 if ($OS -eq 'Linux') {
@@ -375,15 +377,15 @@ Write-Output $iqnlist
 Write-Output "--- Creating $lunCount volumes at $lunSizeInGB GB in size ---"
 
 if ($disableDeduplication) {
-    $volPrep = PrepVolumes -hostName $cVM.RunningInstance.tags.Value -hostType $OS -sizeInGB $lunSizeInGB -numberOfVolumes $lunCount -disableDeduplication
+    $volPrep = PrepVolumes -hostName $VMName -hostType $OS -sizeInGB $lunSizeInGB -numberOfVolumes $lunCount -disableDeduplication
 } else {
-    $volPrep = PrepVolumes -hostName $cVM.RunningInstance.tags.Value -hostType $OS -sizeInGB $lunSizeInGB -numberOfVolumes $lunCount
+    $volPrep = PrepVolumes -hostName $VMName -hostType $OS -sizeInGB $lunSizeInGB -numberOfVolumes $lunCount
 }
 
 
 # associate the iqns with the host
 
-Write-Output "--- Associating iqn with $cVM.RunningInstance.tags.Value ---"
+Write-Output "--- Associating iqn with $VMName ---"
 
 $endpointURI = 'https://' + $k2host + '/api/v2/host_iqns'
 $ciqns = (Invoke-K2RESTCall -URI $endpointURI -method GET -credentials $K2credentials).hits
@@ -393,7 +395,7 @@ $hostprefix = '/hosts/' + $volPrep[0].hostid
 foreach ($i in $iqnlist) {
     if (!($ciqns | Where-Object {$_.iqn -eq $i}).host.ref) {
         $endpointURI = 'https://' + $k2host + '/api/v2/host_iqns'
-        $body = New-K2HostIqn -hostname $cVM.RunningInstance.tags.Value -iqn $i
+        $body = New-K2HostIqn -hostname $VMName -iqn $i
         Invoke-K2RESTCall -URI $endpointURI -method POST -body $body -credentials $K2credentials
     }
 }
@@ -401,7 +403,7 @@ foreach ($i in $iqnlist) {
 
 # Map the volumes to the host
 
-Write-Output "--- Mapping the new luns to host $cVM.RunningInstance.tags.Value ---"
+Write-Output "--- Mapping the new luns to host $VMName ---"
 
 foreach ($i in $volPrep) {
     $endpointURI = 'https://' + $k2host + '/api/v2/mappings'
@@ -411,7 +413,7 @@ foreach ($i in $volPrep) {
 
 # Rescan the host to see the volumes. 
 
-Write-Output "--- Finalizing the LUN scans on $cVM.RunningInstance.tags.Value ---"
+Write-Output "--- Finalizing the LUN scans on $VMName ---"
 
 $iscsi = $k2iSCSIPorts.hits[0].ip_address
 if ($OS -eq 'Linux') {
