@@ -5,10 +5,9 @@
 $k2 = "172.16.10.10"
 $credfile = .\admin.xml
 
-# Mail relay paramters
-$smtprelay = "10.10.10.10"
-$mailTo = "test@email.com"
-$mailFrom = "from@email.com"
+# FileServerParameters
+$fileshare = '\\server\share\folder'
+
 
 # Functions
 function ConvertTo-GBString {
@@ -75,11 +74,9 @@ foreach ($i in $caplist) {
 
 $captable.remove('id')
 
-# Generate the mail message
+$date = get-date -Format s
 
-$date = get-date -Format r 
-$subject = 'K2 capacity for ' + $date
-
-# Send the email
-
-Send-MailMessage -From $mailFrom -To $mailto -Subject $subject -SmtpServer -Body $captable
+# Deposite the file
+$filename = 'K2-' + $k2.replace('.','-') + '-' + $date.Replace(':','-').trim() + '.csv'
+$fullpath = $fileshare + '\' + $filename
+$captable | Export-Csv -NoTypeInformation -Path 
