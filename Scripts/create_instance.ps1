@@ -26,9 +26,9 @@ $diskchild | Add-Member -MemberType NoteProperty -Name "type" -Value 'PERSISTENT
 $diskchild | Add-Member -MemberType NoteProperty -Name "boot" -Value $true
 $diskchild | Add-Member -MemberType NoteProperty -Name "mode" -Value 'READ_WRITE'
 $diskchild | Add-Member -MemberType NoteProperty -Name "autoDelete" -Value $true
-$diskchild | Add-Member -MemberType NoteProperty -Name "deviceName" -Value 'app-host-test-03'
+$diskchild | Add-Member -MemberType NoteProperty -Name "deviceName" -Value $name
 $initializeParams = New-Object PSObject
-$initializeParams | Add-Member -MemberType NoteProperty -Name "sourceImage" -Value "projects/k2c-app-demo/global/images/app-host-05-20-2020"
+$initializeParams | Add-Member -MemberType NoteProperty -Name "sourceImage" -Value "projects/k2c-app-demo/global/images/app-template-5-22-2020"
 $initializeParams | Add-Member -MemberType NoteProperty -Name "diskType" -Value "projects/k2c-app-demo/zones/us-central1-f/diskTypes/pd-standard"
 $initializeParams | Add-Member -MemberType NoteProperty -Name "diskSizeGb" -Value "10"
 $diskchild | Add-Member -MemberType NoteProperty -Name "initializeParams" -Value $initializeParams
