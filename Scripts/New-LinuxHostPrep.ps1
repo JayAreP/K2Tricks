@@ -25,7 +25,6 @@ while ($number -le $numberOfVolumes) {
     Write-Host "Creating Volume object -> $volname"
     New-SDPVolume -VolumeGroupName $vgname -sizeInGB $sizeInGB -name $volname
     Write-Host "Mapping to host -> $name"
-    New-SDPMapping -volumeName $volname -hostName $name
+    New-SDPHostMapping -volumeName $volname -hostName $name
     $number++
 }
-
