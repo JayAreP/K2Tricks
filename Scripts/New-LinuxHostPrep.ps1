@@ -6,7 +6,11 @@ param(
     [parameter(mandatory)]
     [int] $sizeInGB,
     [parameter(mandatory)]
-    [int] $numberOfVolumes
+    [int] $numberOfVolumes,
+    [parameter()]
+    [string] $iqn,
+    [parameter()]
+    [string] $pwwn
 )
 
 # Create the host
@@ -28,3 +32,13 @@ while ($number -le $numberOfVolumes) {
     New-SDPHostMapping -volumeName $volname -hostName $name
     $number++
 }
+
+# Add host connection information
+if ($iqn) {Set-SDPHostIqn -iqn $iqn -hostName $name}
+if ($pwwn) {Set-SDPHostPwwn -pwwn $pwwn -hostName $name}
+
+Write-Host '--- To remove all objects ---'
+Write-Host -ForegroundColor yellow "Get-SDPHost -name $name | Get-SDPHostMapping | Remove-SDPHostMapping"
+Write-Host -ForegroundColor yellow "Get-SDPHost -name $name | Remove-SDPHost"
+Write-Host -ForegroundColor yellow "Get-SDPVolumeGroup -name $vgname | Get-SDPVolume | Remove-SDPVolume"
+Write-Host -ForegroundColor yellow "Get-SDPVolumeGroup -name $vgname | Remove-SDPVolumeGroup"
