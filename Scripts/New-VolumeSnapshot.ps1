@@ -1,12 +1,12 @@
 param(
     [parameter(Mandatory)]
-    [IPAddress] $volumeGroupName,
+    [string] $volumeGroupName,
     [parameter(Mandatory)]
-    [IPAddress] $targetHostName,
+    [string] $targetHostName,
     [parameter(Mandatory)]
-    [IPAddress] $snapshotName,
+    [string] $snapshotName,
     [parameter(Mandatory)]
-    [IPAddress] $retentionPolicyName
+    [string] $retentionPolicyName
 )
 
 # Create the snapshot
