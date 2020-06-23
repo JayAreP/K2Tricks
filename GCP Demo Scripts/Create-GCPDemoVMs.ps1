@@ -34,7 +34,7 @@ function createGcpInstance {
     $diskchild | Add-Member -MemberType NoteProperty -Name "autoDelete" -Value $true
     $diskchild | Add-Member -MemberType NoteProperty -Name "deviceName" -Value 'app-host-test-03'
     $initializeParams = New-Object PSObject
-    $initializeParams | Add-Member -MemberType NoteProperty -Name "sourceImage" -Value "projects/k2c-app-demo/global/images/app-host-05-20-2020"
+    $initializeParams | Add-Member -MemberType NoteProperty -Name "sourceImage" -Value "projects/k2c-app-demo/global/images/app-template-6-22-2020"
     $initializeParams | Add-Member -MemberType NoteProperty -Name "diskType" -Value "projects/k2c-app-demo/zones/us-central1-f/diskTypes/pd-standard"
     $initializeParams | Add-Member -MemberType NoteProperty -Name "diskSizeGb" -Value "10"
     $diskchild | Add-Member -MemberType NoteProperty -Name "initializeParams" -Value $initializeParams

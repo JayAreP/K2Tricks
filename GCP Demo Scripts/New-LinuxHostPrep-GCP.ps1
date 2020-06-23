@@ -1,5 +1,3 @@
-# Example Script for automated deployment of volumes using the SDP module. 
-
 param(
     [parameter(mandatory)]
     [string] $name,
@@ -23,13 +21,13 @@ function getiqn {
     $managementIP = ($cVM.NetworkInterfaces | where-object {$_.name -eq 'nic0'}).NetworkIP
 
     $userhoststring = 'jr_phillips_personal@' + $managementIP
-    $discoverycmd = "cat /etc/iscsi/initiatorname.iscsi"
-    $response = .\plink.exe -i $keyFile $userhoststring -batch $discoverycmd
+    $discoverycmd = "sudo /var/local/deploy/newSystem.sh"
+    $response = ssh.exe -i $keyFile $userhoststring -o "StrictHostKeyChecking no" $discoverycmd
     return $response.Split('=')[-1]
 }
 
 # Get the iqn
-$iqn = getiqn -gceInstance $name -keyFile .\jr_phillips_personal_putty.ppk
+$iqn = getiqn -gceInstance $name -keyFile .\jr_phillips_personal
 
 # Create the host
 Write-Host "Creating Host object -> $name"
